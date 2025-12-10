@@ -1,0 +1,355 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daemon Log Monitoring System</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      :root {
+        --bg: #0e1320;
+        --card-bg: #1c2233;
+        --text: #e9e9e9;
+        --accent: #00d4ff;
+        --accent2: #00ffa3;
+        --header-bg: #101728;
+        --shadow: rgba(0, 0, 0, 0.3);
+      }
+      body.light {
+        --bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --text: #202020;
+        --accent: #0077ff;
+        --accent2: #00c1a2;
+        --header-bg: #e5eefb;
+        --shadow: rgba(0, 0, 0, 0.1);
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        transition: background 0.4s, color 0.4s;
+        min-height: 100vh;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 32px;
+        background: var(--header-bg);
+        color: var(--accent);
+        border-bottom: 2px solid var(--accent2);
+      }
+
+      header h1 {
+        font-size: 22px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .toggle-btn {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.3s;
+      }
+
+      .toggle-btn:hover {
+        opacity: 0.9;
+      }
+
+      .container {
+        padding: 30px;
+        max-width: 1200px;
+        margin: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .stats-row {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+
+      .stat-card {
+        flex: 1;
+        min-width: 180px;
+        background: var(--card-bg);
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px var(--shadow);
+        text-align: center;
+      }
+
+      .stat-card h4 {
+        font-size: 14px;
+        color: #bbb;
+        margin: 0;
+      }
+
+      .stat-card p {
+        margin: 6px 0 0;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--accent2);
+      }
+
+      .chart-box {
+        background: var(--card-bg);
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 6px 16px var(--shadow);
+      }
+
+      h3 {
+        color: var(--accent);
+        margin-top: 0;
+        font-weight: 700;
+        font-size: 18px;
+      }
+
+      canvas {
+        width: 100% !important;
+        height: 340px !important;
+      }
+
+      .memory-bar {
+        height: 16px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .memory-fill {
+        height: 100%;
+        background: #00bfff;
+        border-radius: 10px 0 0 10px;
+        transition: width 0.4s;
+      }
+
+      .mem-label {
+        text-align: right;
+        font-size: 12px;
+        margin-top: 6px;
+        color: #aaa;
+      }
+
+      .logs-box {
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 18px;
+        height: 250px;
+        overflow-y: auto;
+        box-shadow: 0 6px 16px var(--shadow);
+        border-left: 4px solid var(--accent);
+        font-size: 13px;
+        font-family: monospace;
+        white-space: pre-wrap;
+      }
+
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--accent);
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🖥️ Daemon Log Monitoring System</h1>
+      <button class="toggle-btn" onclick="toggleTheme()">🌗 Toggle Theme</button>
+    </header>
+
+    <div class="container">
+      <!-- Stats Section -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <h4>CPU Average</h4>
+          <p id="cpuAvg">--%</p>
+        </div>
+        <div class="stat-card">
+          <h4>CPU Peak</h4>
+          <p id="cpuPeak">--%</p>
+        </div>
+        <div class="stat-card">
+          <h4>Total Logs</h4>
+          <p id="totalLogs">--</p>
+        </div>
+        <div class="stat-card">
+          <h4>Uptime</h4>
+          <p id="uptime">--:--:--</p>
+        </div>
+      </div>
+
+      <!-- CPU Graph -->
+      <div class="chart-box">
+        <h3>CPU Usage (%)</h3>
+        <canvas id="cpuChart"></canvas>
+      </div>
+
+      <!-- Memory Usage -->
+      <div class="chart-box">
+        <h3>Memory Usage</h3>
+        <div class="memory-bar">
+          <div class="memory-fill" id="memFill" style="width: 20%;"></div>
+        </div>
+        <div class="mem-label" id="memLabel">20%</div>
+      </div>
+
+      <!-- Logs -->
+      <div class="chart-box">
+        <h3>Live Logs</h3>
+        <div class="logs-box" id="logs">Fetching logs...</div>
+      </div>
+    </div>
+
+    <script>
+      // Theme Toggle
+      function setTheme(mode) {
+        document.body.classList.toggle("light", mode === "light");
+        localStorage.setItem("theme", mode);
+      }
+      function toggleTheme() {
+        const newMode = document.body.classList.contains("light") ? "dark" : "light";
+        setTheme(newMode);
+      }
+      const savedTheme =
+        localStorage.getItem("theme") ||
+        (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      setTheme(savedTheme);
+
+      // Logs Fetch
+      let totalLogs = 0;
+      function fetchLogs() {
+        fetch("/logs")
+          .then((res) => res.text())
+          .then((data) => {
+            const lines = data.split("\n");
+            totalLogs = lines.length;
+            document.getElementById("totalLogs").innerText = totalLogs;
+            const logsBox = document.getElementById("logs");
+            logsBox.innerHTML = data.replace(/\n/g, "<br>");
+            logsBox.scrollTop = logsBox.scrollHeight;
+          });
+      }
+
+      // Stats & Chart
+      const labels = [];
+      const cpuData = [];
+      let cpuPeak = 0;
+      let cpuSum = 0;
+      let cpuCount = 0;
+
+      const ctx = document.getElementById("cpuChart").getContext("2d");
+      const cpuChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "CPU Usage (%)",
+              data: cpuData,
+              borderColor: "#00ffa3",
+              backgroundColor: "rgba(0,255,163,0.1)",
+              borderWidth: 3,
+              fill: true,
+              tension: 0.45,
+              pointRadius: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              min: 0,
+              max: 20,
+              ticks: {
+                stepSize: 5,
+                color: "var(--text)",
+                font: { size: 12 },
+              },
+              grid: { color: "rgba(255,255,255,0.08)" },
+            },
+            x: {
+              ticks: { display: false },
+              grid: { display: false },
+            },
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: "var(--accent)",
+                font: { size: 14, weight: "bold" },
+              },
+            },
+          },
+        },
+      });
+
+      let uptimeSeconds = 0;
+      function formatTime(sec) {
+        const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+        const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const s = String(sec % 60).padStart(2, "0");
+        return `${h}:${m}:${s}`;
+      }
+
+      function updateStats() {
+        fetch("/stats")
+          .then((res) => res.json())
+          .then((stats) => {
+            const cpu = stats.cpu;
+            const mem = stats.mem;
+
+            labels.push("");
+            cpuData.push(cpu);
+
+            if (cpuData.length > 40) {
+              cpuData.shift();
+              labels.shift();
+            }
+
+            cpuPeak = Math.max(cpuPeak, cpu);
+            cpuSum += cpu;
+            cpuCount++;
+
+            document.getElementById("cpuAvg").innerText = (cpuSum / cpuCount).toFixed(1) + "%";
+            document.getElementById("cpuPeak").innerText = cpuPeak.toFixed(1) + "%";
+
+            document.getElementById("memFill").style.width = mem + "%";
+            document.getElementById("memLabel").innerText = mem + "%";
+
+            cpuChart.update();
+          });
+
+        uptimeSeconds++;
+        document.getElementById("uptime").innerText = formatTime(uptimeSeconds);
+      }
+
+      setInterval(fetchLogs, 2000);
+      setInterval(updateStats, 2000);
+      fetchLogs();
+      updateStats();
+    </script>
+  </body>
+  </html>
